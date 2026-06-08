@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # pyrefly: ignore [missing-import]
 from langchain_community.document_loaders import TextLoader, PyPDFLoader
 # pyrefly: ignore [missing-import]
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 # pyrefly: ignore [missing-import]
 from langchain_community.embeddings import HuggingFaceEmbeddings
 # pyrefly: ignore [missing-import]
