@@ -1,0 +1,1 @@
+# Defines agent state
