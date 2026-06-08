@@ -1,0 +1,33 @@
+STANDARD HOMEOWNERS INSURANCE POLICY
+Policyholder: Robert Johnson
+Policy Number: HO-555666777
+Property Address: 123 Maple Street, Anytown, USA
+Effective Date: June 1, 2024 to May 31, 2025
+
+I. COVERAGE DETAILS
+1. Dwelling Coverage (Coverage A): Protects the physical structure of the home, including the roof, walls, and foundation, as well as attached structures like garages or decks, against perils such as fire, windstorm, hail, and vandalism.
+2. Other Structures (Coverage B): Covers detached structures on the property, such as sheds, fences, and detached garages.
+3. Personal Property (Coverage C): Reimburses the insured for the loss or damage of personal belongings, including furniture, electronics, and clothing, whether they are located inside the home or temporarily off-premises.
+4. Loss of Use (Coverage D): Provides financial assistance for additional living expenses, such as hotel bills and meals, if the home becomes uninhabitable due to a covered peril.
+5. Personal Liability (Coverage E): Offers protection against legal claims for bodily injury or property damage sustained by others on the insured property, as well as medical payments for minor injuries sustained by guests.
+
+II. EXCLUSIONS
+This policy explicitly excludes coverage for damages resulting from:
+1. Flooding: Water damage from floods, surface water, or storm surges is not covered. A separate flood insurance policy is required.
+2. Earthquakes: Earth movement, including earthquakes, landslides, and sinkholes.
+3. Maintenance Issues: Damage caused by neglect, wear and tear, termite infestations, mold, or lack of routine maintenance.
+4. Intentional Acts: Any deliberate damage caused by the insured or residents of the household.
+5. Acts of War or Nuclear Hazard: Damage resulting from war, terrorism, or nuclear accidents.
+
+III. CLAIM LIMITS
+1. Dwelling Limit: The maximum payout for the dwelling structure is $400,000 based on the estimated replacement cost.
+2. Other Structures: Limited to 10% of the dwelling coverage limit ($40,000).
+3. Personal Property: Limited to 50% of the dwelling coverage limit ($200,000), subject to sub-limits for high-value items (e.g., $1,500 maximum for jewelry).
+4. Loss of Use: Limited to 20% of the dwelling limit ($80,000).
+5. Personal Liability: Up to $300,000 per occurrence.
+6. Medical Payments: Up to $5,000 per person.
+
+IV. DEDUCTIBLE INFORMATION
+1. Standard Deductible: A flat deductible of $1,000 applies to all standard property claims.
+2. Windstorm/Hail Deductible: A separate deductible equal to 2% of the dwelling coverage limit ($8,000) applies specifically for damages caused by severe windstorms or hail.
+The deductible will be subtracted from the final claim payout.
