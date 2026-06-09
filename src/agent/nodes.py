@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 # pyrefly: ignore [missing-import]
 from langchain_community.vectorstores import FAISS
 # pyrefly: ignore [missing-import]
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import FastEmbedEmbeddings
 # pyrefly: ignore [missing-import]
 from langchain_community.retrievers import BM25Retriever
 # pyrefly: ignore [missing-import]
@@ -35,10 +35,8 @@ _bm25_retriever = None
 def get_vectorstore():
     global _vectorstore
     if _vectorstore is None:
-        embeddings = HuggingFaceEmbeddings(
-            model_name="all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'},
-            encode_kwargs={'device': 'cpu'}
+        embeddings = FastEmbedEmbeddings(
+            model_name="BAAI/bge-small-en-v1.5"
         )
         _vectorstore = FAISS.load_local(
             persist_directory, 
@@ -83,7 +81,7 @@ def rewrite_query_node(state: AgentState) -> AgentState:
     query = state.get("query", "")
     
     # Using the active Groq model
-    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0, max_retries=2)
     
     prompt = f"""You are an expert insurance policy researcher. Given this insurance claim and a weak search query that failed to retrieve relevant policy documents, rewrite the query to be more specific, use policy terminology, and maximize the chance of finding relevant coverage clauses.
 
@@ -110,7 +108,7 @@ def decision_node(state: AgentState) -> AgentState:
     claim = state.get("claim", "")
     documents = state.get("documents", [])
     
-    if relevance_score == "not_relevant" and retry_count >= 2:
+    if relevance_score == "not_relevant" and retry_count >= 2 and not state.get("web_fallback_used", False):
         print("DECISION NODE: decision = escalate")
         return {
             "decision": "escalate",
@@ -118,7 +116,7 @@ def decision_node(state: AgentState) -> AgentState:
             "sources": []
         }
         
-    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0, max_retries=2)
     structured_llm = llm.with_structured_output(AgentDecision)
     
     docs_text = "\n\n".join([f"Source: {doc.metadata.get('source', 'Unknown')}\nContent: {doc.page_content}" for doc in documents])

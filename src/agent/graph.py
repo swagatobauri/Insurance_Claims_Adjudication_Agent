@@ -106,15 +106,37 @@ def run_claim(claim: str) -> AgentState:
     return final_state
 
 if __name__ == "__main__":
-    # Test
-    test_claim = "My car was damaged in a hailstorm last Tuesday. I am claiming full repair costs under my auto insurance policy."
+    import json
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--claim", type=str, required=False)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
     
-    result = run_claim(test_claim)
+    claim = args.claim if args.claim else "My car was damaged in a hailstorm last Tuesday. I am claiming full repair costs under my auto insurance policy."
     
-    print("\n================ FINAL REPORT ================")
-    print(f"Decision: {result.get('decision')}")
-    print(f"Reasoning: {result.get('reasoning')}")
-    print(f"Sources: {result.get('sources')}")
-    print(f"Retry count: {result.get('retry_count')}")
-    print(f"Web fallback used: {result.get('web_fallback_used')}")
-    print("==============================================")
+    result = run_claim(claim)
+    
+    if args.json:
+        # We wrap the JSON in sentinel tags so it can be extracted cleanly from stdout
+        print("###JSON_START###")
+        # Ensure we only serialize standard dictionary types by wrapping the state dict
+        serializable_state = {
+            "decision": result.get("decision", ""),
+            "reasoning": result.get("reasoning", ""),
+            "sources": result.get("sources", []),
+            "relevance_score": result.get("relevance_score", ""),
+            "hallucination_score": result.get("hallucination_score", ""),
+            "retry_count": result.get("retry_count", 0),
+            "web_fallback_used": result.get("web_fallback_used", False)
+        }
+        print(json.dumps(serializable_state))
+        print("###JSON_END###")
+    else:
+        print("\n================ FINAL REPORT ================")
+        print(f"Decision: {result.get('decision')}")
+        print(f"Reasoning: {result.get('reasoning')}")
+        print(f"Sources: {result.get('sources')}")
+        print(f"Retry count: {result.get('retry_count')}")
+        print(f"Web fallback used: {result.get('web_fallback_used')}")
+        print("==============================================")

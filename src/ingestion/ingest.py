@@ -7,7 +7,7 @@ from langchain_community.document_loaders import TextLoader, PyPDFLoader
 # pyrefly: ignore [missing-import]
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 # pyrefly: ignore [missing-import]
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import FastEmbedEmbeddings
 # pyrefly: ignore [missing-import]
 from langchain_community.vectorstores import FAISS
 
@@ -48,10 +48,8 @@ def main():
     chunks = text_splitter.split_documents(documents)
     
     # 3. Embed using HuggingFace sentence-transformers
-    embeddings = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'device': 'cpu'}
+    embeddings = FastEmbedEmbeddings(
+        model_name="BAAI/bge-small-en-v1.5"
     )
     
     # 4. Store in local FAISS vector store

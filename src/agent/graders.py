@@ -32,7 +32,7 @@ def relevance_grader_node(state: AgentState) -> AgentState:
         return {"relevance_score": "not_relevant"}
         
     # Initialize the LLM
-    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0, max_retries=2)
     structured_llm_grader = llm.with_structured_output(GradeRelevance)
     
     system_prompt = """You are a grader assessing relevance of a retrieved document to an insurance claim.
@@ -47,7 +47,6 @@ It does not need to be a stringent test. The goal is to filter out completely ir
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Claim: {claim}\n\nDocument: {doc.page_content}\n\nDoes this document contain information relevant to adjudicating this claim? Answer yes or no."}
         ]
-        
         try:
             result = structured_llm_grader.invoke(messages)
             if result.score == "yes":
@@ -77,7 +76,7 @@ def hallucination_grader_node(state: AgentState) -> AgentState:
         print("HALLUCINATION GRADER: reasoning is hallucinated")
         return {"hallucination_score": "hallucinated"}
         
-    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0, max_retries=2)
     structured_llm_grader = llm.with_structured_output(GradeHallucination)
     
     system_prompt = """You are a strict fact-checker for an insurance adjudication system.
