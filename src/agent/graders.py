@@ -63,6 +63,52 @@ It does not need to be a stringent test. The goal is to filter out completely ir
     
     return {"relevance_score": final_score}
 
+class GradeHallucination(BaseModel):
+    """Binary score for hallucination check on agent reasoning."""
+    score: Literal["yes", "no"] = Field(
+        description="Does the reasoning rely only on information present in the documents above? Answer yes or no."
+    )
+
+def hallucination_grader_node(state: AgentState) -> AgentState:
+    documents = state.get("documents", [])
+    reasoning = state.get("reasoning", "")
+    
+    if not reasoning or not documents:
+        print("HALLUCINATION GRADER: reasoning is hallucinated")
+        return {"hallucination_score": "hallucinated"}
+        
+    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
+    structured_llm_grader = llm.with_structured_output(GradeHallucination)
+    
+    system_prompt = """You are a strict fact-checker for an insurance adjudication system.
+
+Here are the retrieved policy documents:
+{documents}
+
+Here is the reasoning produced by the agent:
+{reasoning}
+
+Does the reasoning rely only on information present in the documents above?
+Answer yes if every claim in the reasoning is supported by the documents.
+Answer no if the reasoning contains anything not found in the documents."""
+    
+    docs_text = "\n\n".join([doc.page_content for doc in documents])
+    
+    messages = [
+        {"role": "user", "content": system_prompt.format(documents=docs_text, reasoning=reasoning)}
+    ]
+    
+    try:
+        result = structured_llm_grader.invoke(messages)
+        score = "grounded" if result.score == "yes" else "hallucinated"
+    except Exception as e:
+        print(f"Error grading hallucination: {e}")
+        score = "hallucinated"
+        
+    print(f"HALLUCINATION GRADER: reasoning is {score}")
+    
+    return {"hallucination_score": score}
+
 if __name__ == "__main__":
     from src.agent.nodes import retrieve_node
     
@@ -86,3 +132,17 @@ if __name__ == "__main__":
     result_state = relevance_grader_node(state_for_grader)
     
     print(f"Output relevance score: {result_state.get('relevance_score')}")
+
+    # Run hallucination grader test
+    print("\n--- RUNNING HALLUCINATION GRADER ---")
+    hallucination_query = "hail damage vehicle coverage"
+    hallucination_initial_state: AgentState = {"query": hallucination_query, "claim": hallucination_query}
+    hallucination_retrieved_state = retrieve_node(hallucination_initial_state)
+    
+    state_for_hallucination: AgentState = {
+        "reasoning": "The claim is approved because the policy covers hail damage to vehicles under section 3.2",
+        "documents": hallucination_retrieved_state.get("documents", [])
+    }
+    
+    hallucination_result = hallucination_grader_node(state_for_hallucination)
+    print(f"Output hallucination score: {hallucination_result.get('hallucination_score')}")
