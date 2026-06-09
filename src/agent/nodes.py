@@ -17,6 +17,9 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 # pyrefly: ignore [missing-import]
 from langchain_groq import ChatGroq
+# pyrefly: ignore [missing-import]
+from pydantic import BaseModel, Field
+from typing import Literal, List
 
 from src.agent.state import AgentState
 
@@ -113,6 +116,66 @@ Return only the rewritten query, nothing else."""
     
     return {"query": new_query, "retry_count": retry_count + 1}
 
+class AgentDecision(BaseModel):
+    decision: Literal["approve", "deny", "escalate"] = Field(description="Decision on the claim")
+    reasoning: str = Field(description="Detailed explanation grounded in the documents")
+    sources: List[str] = Field(description="List of source document names used")
+
+def decision_node(state: AgentState) -> AgentState:
+    relevance_score = state.get("relevance_score", "")
+    retry_count = state.get("retry_count", 0)
+    claim = state.get("claim", "")
+    documents = state.get("documents", [])
+    
+    if relevance_score == "not_relevant" and retry_count >= 2:
+        print("DECISION NODE: decision = escalate")
+        return {
+            "decision": "escalate",
+            "reasoning": "Insufficient policy evidence found after multiple retrieval attempts. Routing to human adjuster.",
+            "sources": []
+        }
+        
+    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
+    structured_llm = llm.with_structured_output(AgentDecision)
+    
+    docs_text = "\n\n".join([f"Source: {doc.metadata.get('source', 'Unknown')}\nContent: {doc.page_content}" for doc in documents])
+    
+    prompt = f"""You are an expert insurance claims adjudicator. 
+
+Here is the insurance claim submitted:
+{claim}
+
+Here are the relevant policy documents retrieved:
+{docs_text}
+
+Based strictly on the policy documents above:
+1. Decide whether to approve, deny, or escalate this claim
+2. Provide clear reasoning citing specific policy clauses
+3. List the exact source document names you used
+
+Return a JSON with these exact fields:
+- decision: one of 'approve', 'deny', 'escalate'
+- reasoning: detailed explanation grounded in the documents
+- sources: list of source document names used"""
+
+    messages = [{"role": "user", "content": prompt}]
+    
+    try:
+        result = structured_llm.invoke(messages)
+        print(f"DECISION NODE: decision = {result.decision}")
+        return {
+            "decision": result.decision,
+            "reasoning": result.reasoning,
+            "sources": result.sources
+        }
+    except Exception as e:
+        print(f"Error making decision: {e}")
+        return {
+            "decision": "escalate",
+            "reasoning": f"Failed to generate decision: {str(e)}",
+            "sources": []
+        }
+
 if __name__ == "__main__":
     # Quick test
     test_state: AgentState = {"query": "what is the deductible for auto insurance"}
@@ -133,3 +196,22 @@ if __name__ == "__main__":
     rewrite_result = rewrite_query_node(rewrite_state)
     print(f"New query: {rewrite_result.get('query')}")
     print(f"Retry count: {rewrite_result.get('retry_count')}")
+
+    # Test decision node
+    print("\n--- RUNNING DECISION NODE ---")
+    decision_query = "windshield damage falling object coverage"
+    decision_initial_state: AgentState = {"query": decision_query, "claim": decision_query}
+    decision_retrieved_state = retrieve_node(decision_initial_state)
+    
+    decision_state: AgentState = {
+        "claim": "My car windshield was cracked by a falling tree branch, claiming replacement cost",
+        "query": decision_query,
+        "relevance_score": "relevant",
+        "retry_count": 0,
+        "documents": decision_retrieved_state.get("documents", [])
+    }
+    
+    final_decision_state = decision_node(decision_state)
+    print(f"Decision: {final_decision_state.get('decision')}")
+    print(f"Reasoning: {final_decision_state.get('reasoning')}")
+    print(f"Sources: {final_decision_state.get('sources')}")
