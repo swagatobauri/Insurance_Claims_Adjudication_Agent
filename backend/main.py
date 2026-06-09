@@ -11,6 +11,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 # pyrefly: ignore [missing-import]
 from fastapi.responses import StreamingResponse
+# pyrefly: ignore [missing-import]
+from fastapi import UploadFile, File, HTTPException
+import shutil
+import uuid
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# pyrefly: ignore [missing-import]
+from langchain_community.document_loaders import PyPDFLoader
+# pyrefly: ignore [missing-import]
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+# pyrefly: ignore [missing-import]
+from langchain_community.embeddings import FastEmbedEmbeddings
+# pyrefly: ignore [missing-import]
+from langchain_community.vectorstores import FAISS
 
 app = FastAPI()
 
@@ -48,14 +61,24 @@ async def evaluate_claim(request: ClaimRequest):
             cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         )
         
-        # While the agent is running, stream dots to the frontend
-        # We must not block on wait() while stdout fills up, but stdout is tiny (<1KB) so it won't overflow
-        while True:
+        # Poll with a hard 90-second global timeout
+        MAX_WAIT_SECONDS = 90
+        elapsed = 0
+        while elapsed < MAX_WAIT_SECONDS:
             try:
                 await asyncio.wait_for(proc.wait(), timeout=1.0)
                 break
             except asyncio.TimeoutError:
-                yield f"data: {json.dumps({'type': 'token', 'data': '.'})}\n\n"
+                elapsed += 1
+                # Send elapsed time as a heartbeat so the frontend can show a live timer
+                yield f"data: {json.dumps({'type': 'heartbeat', 'elapsed': elapsed})}\n\n"
+        else:
+            # Timed out — kill the process and return an error
+            proc.kill()
+            await proc.wait()
+            yield f"data: {json.dumps({'type': 'timeout', 'data': 'The pipeline exceeded the 90-second limit. Groq API may be rate-limited. Please wait 60 seconds and try again.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            return
                 
         stdout_data = await proc.stdout.read()
         
@@ -81,7 +104,10 @@ async def evaluate_claim(request: ClaimRequest):
             "decision": final_state.get("decision", ""),
             "sources": final_state.get("sources", []),
             "retry_count": final_state.get("retry_count", 0),
-            "web_fallback_used": final_state.get("web_fallback_used", False)
+            "web_fallback_used": final_state.get("web_fallback_used", False),
+            "relevance_score": final_state.get("relevance_score", ""),
+            "hallucination_score": final_state.get("hallucination_score", ""),
+            "source_documents": final_state.get("source_documents", [])
         }
         yield f"data: {json.dumps({'type': 'metadata', 'data': metadata})}\n\n"
         
@@ -96,6 +122,46 @@ async def evaluate_claim(request: ClaimRequest):
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
         
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@app.post("/upload-policy")
+async def upload_policy(file: UploadFile = File(...)):
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+        
+    temp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "temp"))
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, f"{uuid.uuid4()}_{file.filename}")
+    
+    try:
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        loader = PyPDFLoader(temp_path)
+        documents = loader.load()
+        
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
+        chunks = text_splitter.split_documents(documents)
+        
+        embeddings = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+        
+        persist_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "faiss_index"))
+        
+        if os.path.exists(persist_directory):
+            vectorstore = FAISS.load_local(persist_directory, embeddings, allow_dangerous_deserialization=True)
+            vectorstore.add_documents(chunks)
+        else:
+            vectorstore = FAISS.from_documents(documents=chunks, embedding=embeddings)
+            
+        vectorstore.save_local(persist_directory)
+        
+        return {"status": "success", "message": f"Successfully ingested {len(chunks)} chunks from {file.filename}."}
+        
+    except Exception as e:
+        print(f"Error processing upload: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 if __name__ == "__main__":
     # pyrefly: ignore [missing-import]

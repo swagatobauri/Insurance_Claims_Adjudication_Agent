@@ -121,6 +121,14 @@ if __name__ == "__main__":
         # We wrap the JSON in sentinel tags so it can be extracted cleanly from stdout
         print("###JSON_START###")
         # Ensure we only serialize standard dictionary types by wrapping the state dict
+        source_docs = []
+        for doc in result.get("documents", []):
+            if hasattr(doc, "page_content") and hasattr(doc, "metadata"):
+                source_docs.append({
+                    "page_content": doc.page_content,
+                    "metadata": doc.metadata
+                })
+                
         serializable_state = {
             "decision": result.get("decision", ""),
             "reasoning": result.get("reasoning", ""),
@@ -128,7 +136,8 @@ if __name__ == "__main__":
             "relevance_score": result.get("relevance_score", ""),
             "hallucination_score": result.get("hallucination_score", ""),
             "retry_count": result.get("retry_count", 0),
-            "web_fallback_used": result.get("web_fallback_used", False)
+            "web_fallback_used": result.get("web_fallback_used", False),
+            "source_documents": source_docs
         }
         print(json.dumps(serializable_state))
         print("###JSON_END###")
