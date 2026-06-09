@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 # pyrefly: ignore [missing-import]
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 # pyrefly: ignore [missing-import]
 from langchain_community.embeddings import HuggingFaceEmbeddings
 # pyrefly: ignore [missing-import]
@@ -27,29 +27,25 @@ from src.agent.state import AgentState
 load_dotenv()
 
 # Initialize global vector store and retrievers
-base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-persist_directory = os.path.join(base_dir, ".chroma")
+persist_directory = "faiss_index"
 
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+_vectorstore = None
+_bm25_retriever = None
 
-vectorstore = Chroma(
-    persist_directory=persist_directory,
-    embedding_function=embeddings
-)
-
-# Extract documents from Chroma to initialize BM25
-db_data = vectorstore.get()
-db_docs = db_data.get('documents', [])
-db_metadatas = db_data.get('metadatas', [])
-
-all_documents = []
-for doc, meta in zip(db_docs, db_metadatas):
-    all_documents.append(Document(page_content=doc, metadata=meta or {}))
-
-bm25_retriever = None
-if all_documents:
-    bm25_retriever = BM25Retriever.from_documents(all_documents)
-    bm25_retriever.k = 4
+def get_vectorstore():
+    global _vectorstore
+    if _vectorstore is None:
+        embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            model_kwargs={'device': 'cpu'},
+            encode_kwargs={'device': 'cpu'}
+        )
+        _vectorstore = FAISS.load_local(
+            persist_directory, 
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+    return _vectorstore
 
 def retrieve_node(state: AgentState) -> AgentState:
     query = state.get("query", "")
@@ -58,33 +54,20 @@ def retrieve_node(state: AgentState) -> AgentState:
         print("RETRIEVE: No query provided in state.")
         return {"documents": []}
         
-    dense_results = []
-    keyword_results = []
-    
-    def run_dense():
-        return vectorstore.similarity_search(query, k=4)
-        
-    def run_keyword():
-        if bm25_retriever:
-            return bm25_retriever.invoke(query)
-        return []
-
-    # Run two searches in parallel
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_dense = executor.submit(run_dense)
-        future_keyword = executor.submit(run_keyword)
-        
-        dense_results = future_dense.result()
-        keyword_results = future_keyword.result()
+    # Initialize these singletons sequentially before the thread pool
+    # to avoid chromadb's concurrent initialization KeyError bug
+    vs = get_vectorstore()
+    # Run searches sequentially to avoid thread deadlocks
+    dense_results = vs.similarity_search(query, k=4)
         
     # Merge and deduplicate by page_content
     merged_docs = []
     seen_contents = set()
     
-    for doc in dense_results + keyword_results:
+    for doc in dense_results:
         if doc.page_content not in seen_contents:
-            merged_docs.append(doc)
             seen_contents.add(doc.page_content)
+            merged_docs.append(doc)
             
     print(f"RETRIEVE: Found {len(merged_docs)} chunks after hybrid merge")
     

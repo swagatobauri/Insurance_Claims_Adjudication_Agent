@@ -9,7 +9,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # pyrefly: ignore [missing-import]
 from langchain_community.embeddings import HuggingFaceEmbeddings
 # pyrefly: ignore [missing-import]
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 
 def main():
     # Load environment variables
@@ -18,7 +18,7 @@ def main():
     # Define directories
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     data_dir = os.path.join(base_dir, "data", "sample_policies")
-    persist_directory = os.path.join(base_dir, ".chroma")
+    persist_directory = os.path.join(base_dir, "faiss_index")
     
     documents = []
     
@@ -48,17 +48,21 @@ def main():
     chunks = text_splitter.split_documents(documents)
     
     # 3. Embed using HuggingFace sentence-transformers
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    
-    # 4. Store in local Chroma vector store
-    vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory=persist_directory
+    embeddings = HuggingFaceEmbeddings(
+        model_name="all-MiniLM-L6-v2",
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'device': 'cpu'}
     )
     
+    # 4. Store in local FAISS vector store
+    vectorstore = FAISS.from_documents(
+        documents=chunks,
+        embedding=embeddings
+    )
+    vectorstore.save_local(persist_directory)
+    
     print(f"Successfully processed {len(documents)} documents.")
-    print(f"Stored {len(chunks)} chunks into Chroma vector store at {persist_directory}")
+    print(f"Stored {len(chunks)} chunks into FAISS vector store at {persist_directory}")
 
 if __name__ == "__main__":
     main()
